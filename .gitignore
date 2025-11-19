@@ -1,20 +1,12 @@
-# Fichiers système R/RStudio
+
 .Rproj.user/
 .Rhistory
 .RData
 .Ruserdata
 
-# Fichiers 'renv' - Ne versionner QUE renv.lock et .Rprofile
-# Ignorer la librairie locale qui contient les packages
 renv/library/
 renv/staging/
 
-# Données (si complete.csv > 100MB)
-# Si votre CSV est trop gros, décommentez la ligne ci-dessous
-# et expliquez dans le README où le télécharger.
-# data/complete.csv
-
-# Cache Shiny
 .shinysession.RData
 
 data/*
