@@ -228,13 +228,14 @@ Nous nous sommes dans un premier temps demandé comment le nombre d'observations
 
 ```{r plot-year, echo=FALSE, message = FALSE, warning=FALSE, out.width='100%', fig.width=10, fig.height=6}
 
-ufo_data_summary_year <- ufo_data %>%  group_by(year) %>%  summarise(n = n(), .groups = 'drop')
-
-ggplot(ufo_data_summary_year, aes(x = as.factor(year), y = n)) +  geom_col(fill = "#007bff") + 
-  labs(    title = "Nombre d'observations par Année",
-    x = "Année",    y = "Nombre d'observations (n)"  ) +
-  theme_minimal(base_size = 12) + 
-  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 8))
+p <- ufo_data |>
+      count(year) |>
+      ggplot(aes(x = year, y = n)) +
+      geom_line(color = "#18bc9c", linewidth = 1) +
+      geom_area(fill = "#18bc9c", alpha = 0.2) +
+      theme_minimal(base_size = 12) +
+      labs(x = "Année", y = "Nombre d'observations", title = "Nombre d'observations par Année")
+    ggplotly(p) |> config(displayModeBar = FALSE)
 ```
 
 Avec ce premier graphique, on voit bien que depuis le début des années 2000, le nombre d'observations explose. Cela peut être dû à plusieurs facteurs comme la potentielle facilité de rapporter une observation avec les nouvelles technologies émergentes ou encore la culture populaire qui aide à rendre ce sujet acceptable socialement.
@@ -242,29 +243,55 @@ Avec ce premier graphique, on voit bien que depuis le début des années 2000, l
 ## Par Mois et Heure
 
 ```{r plot-month-hour, echo=FALSE, message = FALSE, warning=FALSE, out.width='100%', fig.width=12, fig.height=6}
-ufo_data_summary_month <- ufo_data %>%  group_by(month) %>%  summarise(n = n(), .groups = 'drop')
 
-p1 <- ggplot(ufo_data_summary_month, aes(x = month, y = n)) +
-  geom_col(fill = "#007bff") + 
-  labs(    title = "Nombre d'observations par Mois",    x = "Mois", y = "Nombre d'observations (n)"  ) + 
-  theme_minimal(base_size = 12) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p1 <- ufo_data |>
+      mutate(month_label = month(datetime, label = TRUE, abbr = TRUE, locale = "C")) |>
+      count(month_label) |>
+      ggplot(aes(x = month_label, y = n)) +
+      geom_col(fill = "#f39c12") +
+      theme_minimal(base_size = 12) +
+      labs(x = "Mois", y = "Nombre d'observations", title = "Nombre d'observations par Mois")
+    g1 <- ggplotly(p1) |> config(displayModeBar = FALSE)
 
-ufo_data_summary_hour <- ufo_data %>%  group_by(hour) %>%  summarise(n = n(), .groups = 'drop')
+p2 <- ufo_data |>
+      mutate(hour_val = hour(datetime)) |>
+      count(hour_val) |>
+      ggplot(aes(x = hour_val, y = n)) +
+      geom_line(color = "#8e44ad", size = 1) +
+      theme_minimal(base_size = 12) +
+      scale_x_continuous(breaks = seq(0, 23, 4)) +
+      labs(x = "Heure", y = "Nombre d'observations", title = "Nombre d'observations par Heure")
+    g2 <- ggplotly(p2) |> config(displayModeBar = FALSE)
+    
+# Combinez les graphiques
+combined_plot <- subplot(g1, g2, nrows = 1, margin = 0.05, shareY = FALSE) |>
+  layout(
+    title = list(text = ""),
+    
+    xaxis = list(title = "Mois"), 
+    xaxis2 = list(title = "Heure"), 
+    
+    yaxis = list(title = "Nombre d'observations"), 
+    yaxis2 = list(title = "Nombre d'observations"), 
+    
+    annotations = list(
+      list(x = 0, y = 1.05, text = "Observations par Mois",
+           xref = "paper", yref = "paper", showarrow = FALSE, font = list(size = 18)),
+      list(x = 0.75, y = 1.05, text = "Observations par Heure",
+           xref = "paper", yref = "paper", showarrow = FALSE, font = list(size = 18))
+    )
+  )
 
-p2 <- ggplot(ufo_data_summary_hour, aes(x = as.factor(hour), y = n)) +  geom_col(fill = "#5bc0de") + 
-  labs(    title = "Nombre d'observations par Heure",    x = "Heure de la journée", y = "Nombre d'observations (n)"  ) + 
-  theme_minimal(base_size = 12)
+combined_plot
 
-p1 + p2
 ```
 
-Grâce à ces deux graphiques, on peut voir que le nombre d'observations varie bien selon le mois et l'heure de la journée. De même que pour les variations au cours des années, on peut expliquer cela par plusieurs facteurs. En premier lieu, les observations sont plus courantes durant la nuit ce qui peut être expliqué par le fait que la nuit les lumières sont plus visibles et nous avons moins de repères visuels avec le manque de lumière naturelle. En deuxième lieu, on peut voir que durant l'été il y a une hausse plutôt importante d'observations qui peut être expliquée par le fait que les gens vont avoir tendance à être plus dehors lorsque la météo le permet et que les journées sont plus longues.
+Grâce à ces deux graphiques, on peut voir que le nombre d'observations varie bien selon le mois et l'heure de la journée. De même que pour les variations au cours des années, on peut tenter d'expliquer cela par plusieurs facteurs. En premier lieu, les observations sont plus courantes durant la nuit ce qui peut être expliqué par le fait que la nuit les lumières sont plus visibles et nous avons moins de repères visuels avec le manque de lumière naturelle. En deuxième lieu, on peut voir que durant l'été il y a une hausse plutôt importante d'observations qui peut être expliquée par le fait que les gens vont avoir tendance à être plus dehors lorsque la météo le permet et que les journées sont plus longues.
 
 # Analyse Temporelle détaillée
 Nous avons voulu avoir une vision plus précise encore en fonction des jours et des heures pour les apparitions. Pour ce faire nous avons créé une heatmap qui nous résume parfaitement les apparitions.
 
-```{r}
+```{r heatmap, echo=FALSE, message = FALSE, warning=FALSE, out.width='100%', fig.width=12, fig.height=4 }
     heatmap_data <- ufo_data |>
       mutate(wday_label = wday(datetime, label = TRUE, abbr = TRUE, week_start = 1),
              hour_val = hour(datetime)) |>
@@ -274,24 +301,29 @@ Nous avons voulu avoir une vision plus précise encore en fonction des jours et 
       geom_tile(color = "white") +
       scale_fill_viridis_c(option = "plasma") +
       theme_minimal(base_size = 12) +
-      labs(x = "Heure (00h-23h)", y = "Jour", fill = "Nombre d'observations") +
+      labs(x = "Heure (00h-23h)", y = "Jour", fill = "Nombre d'observations", title = "Heatmap des Jour/Heure") +
       scale_x_continuous(breaks = seq(0, 23, 2))
     
     ggplotly(p) |> config(displayModeBar = FALSE)
   
 ```
 
+On peut donc voir qu'une tendance se démarque clairement avec une concentration du nombre d'observations très élevée le samedi entre 21 h et 22 H. Pour expliquer ceci, on peut simplement reprendre nos hypothèses précédentes et dire que cela est dû au fait que les personnes ont plus tendance à sortir le week-end (spécialement le samedi soir) en ajoutant le fait que la nuit favorise les observations (manque de repère visuel, lumières plus visibles, etc).
 
 # Analyse des Formes
 Une des choses qui interpelle le plus quand on parle d'OVNI peut notamment être la forme sous laquelle l'OVNI a été observé. Bien que nous ayons un grand nombre d'individus dans notre base de données, on retrouve de nombreuses fois les mêmes formes ou le même type de forme comme : une lumière, un rond ou une sphère, un triangle, un cigare et encore quelques autres. Pour faciliter l'analyse nous avons regroupé certaines formes ensemble quand celles-ci sont quasiment similaires.
 
 ```{r plot-shape, echo=FALSE, message = FALSE, warning=FALSE, out.width='100%', fig.width=10, fig.height=6}
-ufo_data %>%  count(shape, sort = TRUE) %>%  ggplot(aes(x = fct_reorder(shape, n), y = n)) +
-  geom_col(fill = "#007bff") + 
-  labs(    title = "Formes les plus observées",     x = "Forme",     y = "Nombre d'observations (n)"  ) + 
-  theme_minimal(base_size = 12) + 
-  coord_flip() 
-# coord_flip est souvent meilleur pour les graphiques en barres avec beaucoup de catégories
+p <- ufo_data |>
+      count(shape, sort = TRUE) |>
+      head(10) |>
+      mutate(shape = fct_reorder(shape, n)) |>
+      ggplot(aes(x = shape, y = n, text = paste("Total:", n))) +
+      geom_col(fill = "#3498db") +
+      coord_flip() +
+      theme_minimal(base_size = 12) +
+      labs(x = "Forme", y = "Nombre d'observations", title = "Nombre d'observations par forme")
+    ggplotly(p, tooltip = "text") |> config(displayModeBar = FALSE)
 ```
 
 # Conclusion
