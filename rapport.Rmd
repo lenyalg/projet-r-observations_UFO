@@ -1,0 +1,208 @@
+---
+title: "Rapport statistique détaillé sur les observations d'OVNIs en Amérique"
+output: 
+  html_document:
+    theme: flatly
+---
+```{r echo=FALSE, message = FALSE, warning=FALSE, out.width='100%', fig.width=12, fig.height=7}
+library("ggplot2")
+library(readr)
+library(janitor)
+library(lubridate)
+library(stringr)
+library(forcats)
+library(dplyr)
+library(patchwork)
+library(DT)
+
+data_path <- "data/complete.csv"
+
+raw_data <- readr::read_csv(data_path, 
+                            col_types = cols(.default = "c"))
+
+ufo_data <- raw_data %>%
+  janitor::clean_names() %>%
+
+  mutate(
+    latitude = as.numeric(latitude),
+    longitude = as.numeric(longitude),
+    duration_seconds = as.numeric(duration_seconds),
+
+    datetime = lubridate::mdy_hm(datetime)
+  ) %>%
+
+  filter(
+    !is.na(datetime),         
+    !is.na(latitude),         
+    !is.na(longitude),
+    !is.na(shape),            
+    !is.na(duration_seconds)
+  ) %>%
+
+  filter(
+    country == "us",
+    lubridate::year(datetime) >= 1949
+  ) %>%
+  
+  filter(
+    duration_seconds > 0,
+    duration_seconds < (3600 * 24)
+  ) %>%
+
+  mutate(
+    year = lubridate::year(datetime),
+    month = lubridate::month(datetime, label = TRUE, abbr = FALSE),
+    hour = lubridate::hour(datetime),
+    weekday = lubridate::wday(datetime, label = TRUE, abbr = FALSE),
+
+    time_of_day = case_when(
+      hour >= 6 & hour < 12 ~ "Matin (06-12h)",
+      hour >= 12 & hour < 18 ~ "Après-midi (12-18h)",
+      hour >= 18 & hour < 22 ~ "Soirée (18-22h)",
+      TRUE ~ "Nuit (22-06h)"
+    )
+  ) %>%
+
+  mutate(
+    state = toupper(state),
+    shape = tolower(shape),
+    shape = case_when(
+      shape %in% c("round", "sphere") ~ "circle",
+      shape %in% c("lights") ~ "light",
+      shape %in% c("cigar-shaped") ~ "cigar",
+      shape %in% c("fireball", "flare") ~ "fireball",
+      TRUE ~ shape
+    ),
+    shape = forcats::fct_lump_n(shape, n = 10, other_level = "Other")
+  ) %>%
+
+  select(
+    datetime, year, month, hour, weekday, time_of_day,
+    city, state, latitude, longitude,
+    shape, duration_seconds, comments
+  )
+```
+
+Bilan Statistique des Signalements d'OVNIs
+Contexte et Matériel de Base
+Ce rapport repose sur une Analyse Exploratoire de Données (AED) réalisée sur le jeu de données des observations d'OVNIs, une ressource clé couramment utilisée sur Kaggle. Ce corpus est dérivé des archives du National UFO Reporting Center (NUFORC) et recense plus de 80 000 signalements couvrant une large amplitude temporelle. L'objectif est d'utiliser l'écosystème R Tidyverse pour transformer ces données brutes en indicateurs statistiques pertinents et d'identifier des tendances non triviales au sein des observations.
+
+L'analyse vise à établir un profil statistique des signalements selon les dimensions temporelles, spatiales et descriptives, sans spéculer sur l'origine intrinsèque des phénomènes.
+Structure du Jeu de Données
+Le jeu de données est constitué des colonnes suivantes, toutes cruciales pour une AED complète. Notez que plusieurs d'entre elles nécessiteront un nettoyage rigoureux (conversion de type, gestion des outliers ou des valeurs manquantes) avant d'être exploitées :
+
+```{r table-description-colonnes, echo=FALSE, message=FALSE, warning=FALSE, out.width='100%'}
+library(knitr)
+library(dplyr)
+library(kableExtra)
+
+description_colonnes <- tibble(
+  Variable = c("datetime", "city", "state", "country", "shape", 
+               "duration (seconds)", "duration (hours/min)", "comments", 
+               "date posted", "latitude", "longitude"),
+  Description = c("Date et heure précises de l'observation (Base de l'analyse chronologique).", 
+                  "Nom de la ville.", 
+                  "Abréviation de l'État (principalement US).", 
+                  "Code du pays (ex. : 'us').", 
+                  "Forme de l'objet rapporté. Variable catégorielle clé.", 
+                  "Durée de l'observation en secondes. Sujette à un nettoyage rigoureux.", 
+                  "Durée fournie dans son format original.", 
+                  "Description narrative détaillée de l'événement.", 
+                  "Date d'enregistrement du rapport.", 
+                  "Coordonnée de latitude (pour la cartographie).", 
+                  "Coordonnée de longitude (pour la cartographie).")
+)
+
+kable(description_colonnes, 
+      caption = "Structure détaillée du jeu de données des observations d'OVNIs.",
+      col.names = c("Variable", "Description/Rôle Clé"),
+      align = 'lc',
+      booktabs = TRUE) %>%
+  kable_styling(full_width = FALSE, 
+                latex_options = "striped",
+                bootstrap_options = c("striped", "hover", "condensed")) %>%
+  row_spec(0, background = "#ecf0f1", color = "black")
+```
+
+```{r echo=FALSE, message = FALSE, warning=FALSE}
+datatable(ufo_data[1:10, ],
+          options = list(
+              dom = 't',       
+              scrollX = TRUE   
+          ),
+          class = 'compact nowrap',
+          rownames = FALSE
+)
+```
+
+La taille de la population de la base de données est d'environ 80 000 individus et couvre une période allant de 1949 à 2014.
+
+Nous nous sommes dans un premier temps demandé comment le nombre d'observations évolue dans le temps en fonction du nombre d'années disponible dans nos données. Pour cela, nous avons donc réalisé un graphique en barres en fonction des années.
+
+```{r echo=FALSE, message = FALSE, warning=FALSE, out.width='100%', fig.width=12, fig.height=7}
+
+ufo_data_summary_year <- ufo_data %>%
+  group_by(year) %>%
+  summarise(n = n(), .groups = 'drop')
+
+ggplot(ufo_data_summary_year, aes(x = as.factor(year), y = n)) +
+  geom_col(fill = "cyan") +
+  labs(
+    title = "Nombre d'observations par Année",
+    x = "Année",
+    y = "Nombre d'observations (n)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Avec ce premier graphique, on voit bien que depuis le début des années 2000, le nombre d'observations explose. Cela peut être du a plusieurs facteurs comme la potentiel facilité de rapporté une observation avec les nouvelles technologies émergente ou encore la culture populaire qui aide à rendre ce sujet acceptable socialement.
+
+Pour rester dans une analyse temporelle, nous avons ensuite décidé de voir si au cours d'une année le nombre varie selon les mois, mais aussi si le nombre varie en fonction de l'heure de la journée.
+
+```{r echo=FALSE,fig.width=12}
+ufo_data_summary_month <- ufo_data %>%
+  group_by(month) %>%
+  summarise(n = n(), .groups = 'drop')
+
+p1 <- ggplot(ufo_data_summary_month, aes(x = as.factor(month), y = n)) +
+  geom_col(fill = "red") +
+  labs(
+    title = "Nombre d'observations par Mois",
+    x = "Année",
+    y = "Nombre d'observations (n)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ufo_data_summary_hour <- ufo_data %>%
+  group_by(hour) %>%
+  summarise(n = n(), .groups = 'drop')
+
+p2 <- ggplot(ufo_data_summary_hour, aes(x = as.factor(hour), y = n)) +
+  geom_col(fill = "green") +
+  labs(
+    title = "Nombre d'observations par Heure",
+    x = "Année",
+    y = "Nombre d'observations (n)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p1 + p2
+```
+
+Grâce à ces deux graphiques, on peut voir que le nombre d'observation varie bien selon le mois et l'heure de la journée. De même que pour les variations au cours des années, on peut expliquer cela par plusieurs facteurs. En premier lieu, les observations sont plus courantes durant la nuit ce qui peut être expliqué par le fait que la nuit les lumières sont plus visible et nous avons moins de repère visuel avec le manque de lumière naturelle. En deuxième lieu, on peut voir que durant l'été il y a une hausse plutôt importante d'observation qui peut être expliquée par le fait que les gens vont avoir tendance à plus dehors lorsque la météo le permet et que les journées sont plus longues.
+
+
+Une des choses qui interpelle le plus quand on parle d'OVNI peut notamment être la forme sous laquelle l'OVNI a été observé. Bien que nous avons un grand nombre d'individus dans notre base de données, on retrouve de nombreuses fois, les mêmes, les formes ou le même type de forme comme : une lumière, un rond ou une sphère, un triangle, un cigare et encore quelques autres. Pour facilité l'analyse nous avons regroupé certaine forme ensemble quand celles-ci sont quasiment similaires.
+
+```{r echo=FALSE, fig.width=12}
+  ufo_data %>%
+    count(shape, sort = TRUE) %>%
+    ggplot(aes(x = fct_reorder(shape, n), y = n)) +
+    geom_col(fill = "#08d9d6") +
+    labs(title = "Formes les plus observées", x = "Forme", y = "Nombre") +
+    theme_minimal()
+```
