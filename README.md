@@ -28,8 +28,8 @@ Ce projet utilise `renv` pour la gestion des dépendances.
 
 3. **Ajoutez le jeu de données :**
 
-  Téléchargez le fichier `complete.csv` depuis l'URL : URL
-  Placez ce fichier téléchargé dans le nouveau dossier `data`, en vous assurant qu'il porte bien le nom `complete.csv`.
+      Téléchargez le fichier `complete.csv` depuis l'URL : URL
+      Placez ce fichier téléchargé dans le nouveau dossier `data`, en vous assurant qu'il porte bien le nom `complete.csv`.
 
 4.  **Installer les dépendances (avec `renv`) :**
     Ouvrez `projet-r.Rproj` dans RStudio. Le projet devrait automatiquement vous proposer d'installer les dépendances via `renv`.
